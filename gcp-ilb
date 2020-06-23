@@ -1,6 +1,6 @@
 #!/bin/sh
 # ---------------------------------------------------------------------
-# # Copyright 2018 Google Inc. 
+# # Copyright 2020 Google Inc. 
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -211,7 +211,7 @@ ilb_stop() {
 		i=$((i+2))
 	done
 
-	log err "The cat is too die-hard and could not be terminated. Hasta la vista, baby"
+	log err "The cat has more than 9 lives and could not be terminated."
 	return $OCF_ERR_GENERIC
 	
 }
