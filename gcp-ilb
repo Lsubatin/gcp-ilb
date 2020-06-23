@@ -26,7 +26,7 @@
 
 # Defaults
 OCF_RESKEY_cat_default="nc"
-OCF_RESKEY_port_default="600000"
+OCF_RESKEY_port_default="60000"
 
 if  type "socat" > /dev/null 2>&1; then
 	OCF_RESKEY_cat_default="socat"
