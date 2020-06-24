@@ -95,7 +95,7 @@ exit 0
 log() {
 		lvl=$1
 		msg=$2
-		ocf_log $lvl “$0 - $process - $pid: $msg”
+		ocf_log $lvl "$0 - $process - $pid: $msg"
 }
 
 getpid() {
