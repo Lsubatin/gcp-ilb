@@ -25,8 +25,13 @@
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 
 # Defaults
-OCF_RESKEY_cat_default="nc"
+OCF_RESKEY_cat_default="socat"
 OCF_RESKEY_port_default="60000"
+OCF_RESKEY_log_enable="false"
+OCF_RESKEY_log_cmd="gcloud"
+OCF_RESKEY_log_params="logging write GCPILB"
+OCF_RESKEY_log_end_params=""
+
 
 if  type "socat" > /dev/null 2>&1; then
 	OCF_RESKEY_cat_default="socat"
@@ -35,12 +40,25 @@ else
 fi;
 
 
-
 : ${OCF_RESKEY_cat=${OCF_RESKEY_cat_default}}
 : ${OCF_RESKEY_port=${OCF_RESKEY_port_default}}
 
 process="$OCF_RESOURCE_INSTANCE"
 pidfile="/var/run/$OCF_RESOURCE_INSTANCE.pid"
+
+
+#Validate command for logging
+if $OCF_RESKEY_log_enable = "true"; then
+    if  type $OCF_RESKEY_log_cmd > /dev/null 2>&1; then
+	    logging_cmd="$OCF_RESKEY_log_cmd $OCF_RESKEY_log_params"
+        ocf_log debug "Logging command is: \'$logging_cmd\' "
+    else 
+        $OCF_RESKEY_log_enable = "false"
+        ocf_log err "\'$logging_cmd\' is invalid. External logging disabled."
+		
+    fi;
+fi
+
 
 #######################################################################
 ilb_metadata() {
@@ -75,12 +93,53 @@ cat <<END
         <shortdesc lang="en">Path to nc / socat </shortdesc>
         <content type="string" default="${OCF_RESKEY_cat_default}" />
     </parameter>
+    <parameter name="log_enable">
+        <longdesc lang="en">
+            Logging with an external application is enabled (accepts "true" or "false").  The defaults are configured to call "gcloud logging" (see: https://cloud.google.com/sdk/gcloud/reference/logging).
+        </longdesc>
+        <shortdesc lang="en">Log enabled </shortdesc>
+        <content type="string" default="false" />
+    </parameter>
+    <parameter name="log_cmd">
+        <longdesc lang="en">
+           External logging command. The defaults are configured to call "gcloud logging" (see: https://cloud.google.com/sdk/gcloud/reference/logging). 
+           This parameter should only have the binary that can be validated (e.g., gcloud). The rest of the command is formed with the additional parameters 
+           and the message being logged as follows:
+           - log_cmd + log_params + "The message being logged" + log_end_params
+           
+           Using the gcloud command for Stackdriver logging, the parameters would be:
+           - log_cmd = gcloud
+           - log_params = logging write GCPILB
+           - "This is a message being sent by the app"
+           - log_end_params =  (nothing in this case, this is reserved for use with other tools)
+           Which would result in this valid command (where GCPILB is the name of the log):
+           gcloud logging write GCPILB "This is a message being sent by the app"
+
+           NOTE: Only the binary is validated for existence and no further checks are performed. The assumption is that only administrators with root access can configure this tool.
+        </longdesc>
+        <shortdesc lang="en">External log command </shortdesc>
+        <content type="string" default="gcloud" />
+    </parameter>
+    <parameter name="log_params">
+        <longdesc lang="en">
+           Additional input for the logging application. See explanation for log_cmd
+        </longdesc>
+        <shortdesc lang="en">Additional input 1 </shortdesc>
+        <content type="string" default="logging write GCPILB" />
+    </parameter>
+    <parameter name="log_end_params">
+        <longdesc lang="en">
+           Additional input for the logging application. Placed after the message being logged.
+        </longdesc>
+        <shortdesc lang="en">Additional input 1 </shortdesc>
+        <content type="string" default="" />
+    </parameter>
 
 </parameters>
 
 <actions>
-    <action name="start"        timeout="180s" />
-    <action name="stop"         timeout="180s" />
+    <action name="start"        timeout="10s" />
+    <action name="stop"         timeout="30s" />
     <action name="monitor"      depth="0" timeout="30s" interval="30s" />
     <action name="validate-all" timeout="5s" />
     <action name="meta-data"    timeout="5s" />
@@ -93,9 +152,12 @@ exit 0
 #######################################################################
 
 log() {
-		lvl=$1
-		msg=$2
-		ocf_log $lvl "$0 - $process - $pid: $msg"
+	lvl=$1
+	msg=$2
+	ocf_log $lvl "$0 - $process - $pid: $msg"
+	if [[ "${OCF_RESKEY_log_enable}" = "true" ]] ; then
+	    ( ${OCF_RESKEY_log_cmd} ${OCF_RESKEY_log_params} "L $lvl: $msg" ${OCF_RESKEY_log_end_params} )
+	fi
 }
 
 getpid() {
@@ -218,6 +280,7 @@ ilb_stop() {
 
 ilb_validate() {
 	check_binary "$OCF_RESKEY_cat"
+    check_binary "$OCF_RESKEY_log_cmd"
 
 	if ! ocf_is_decimal "$OCF_RESKEY_port"; then
 		ocf_exit_reason "$OCF_RESKEY_port is not a valid port"
